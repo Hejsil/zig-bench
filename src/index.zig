@@ -12,16 +12,11 @@ const time = os.time;
 const Def = builtin.TypeInfo.Definition;
 
 pub fn benchmark(comptime B: type) !void {
-    if (getDef(B, "setup")) |_|
-        _ = B.setup();
-
     const args = if (getDef(B, "args")) |_| B.args else []void{{}};
     const iterations: u32 = if (getDef(B, "iterations")) |_| B.iterations else 100000;
     const functions = comptime blk: {
         var res: []const Def = []Def{};
         for (meta.definitions(B)) |def| {
-            if (comptime mem.eql(u8, def.name, "setup"))
-                continue;
             if (def.data != builtin.TypeInfo.Definition.Data.Fn)
                 continue;
 
@@ -155,9 +150,6 @@ test "benchmark" {
         // How many iterations to run each benchmark.
         // If not present then a default will be used.
         const iterations = 100000;
-
-        // If present, setup will be called before any benchmarks are run.
-        fn setup() void {}
 
         fn sum_slice(slice: []const u8) u64 {
             var res: u64 = 0;
