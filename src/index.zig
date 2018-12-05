@@ -57,13 +57,14 @@ pub fn benchmark(comptime B: type) !void {
             while (i < iterations) : (i += 1) {
                 timer.reset();
 
-                switch (@typeOf(arg)) {
-                    void => _ = @noInlineCall(@field(B, def.name)),
-                    else => _ = @noInlineCall(@field(B, def.name), arg),
-                }
+                const res = switch (@typeOf(arg)) {
+                    void => @noInlineCall(@field(B, def.name)),
+                    else => @noInlineCall(@field(B, def.name), arg),
+                };
 
                 const runtime = timer.read();
                 runtime_sum += runtime;
+                doNotOptimize(res);
             }
 
             const runtime_mean = @intCast(u64, runtime_sum / iterations);
@@ -76,6 +77,13 @@ pub fn benchmark(comptime B: type) !void {
             debug.warn("{}\n", runtime_mean);
         }
     }
+}
+
+/// Pretend to use the value so the optimizer cant optimize it out.
+fn doNotOptimize(val: var) void {
+    const T = @typeOf(val);
+    var store: T = undefined;
+    @ptrCast(*volatile T, &store).* = val;
 }
 
 fn digits(comptime N: type, comptime base: comptime_int, n: N) usize {
@@ -136,17 +144,17 @@ test "benchmark" {
         // If not present, then it is assumed that the functions
         // take no input.
         var args = [][]const u8{
-            []u8{},
-            []u8{ 1, 10, 100 } ** 1,
-            []u8{ 1, 10, 100 } ** 2,
-            []u8{ 1, 10, 100 } ** 4,
-            []u8{ 1, 10, 100 } ** 8,
             []u8{ 1, 10, 100 } ** 16,
+            []u8{ 1, 10, 100 } ** 32,
+            []u8{ 1, 10, 100 } ** 64,
+            []u8{ 1, 10, 100 } ** 128,
+            []u8{ 1, 10, 100 } ** 256,
+            []u8{ 1, 10, 100 } ** 512,
         };
 
         // How many iterations to run each benchmark.
         // If not present then a default will be used.
-        const iterations = 1000000;
+        const iterations = 100000;
 
         // If present, setup will be called before any benchmarks are run.
         fn setup() void {}
