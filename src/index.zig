@@ -138,7 +138,7 @@ test "benchmark" {
         // The functions will be benchmarked with the following inputs.
         // If not present, then it is assumed that the functions
         // take no input.
-        var args = [][]const u8{
+        const args = [][]const u8{
             []u8{ 1, 10, 100 } ** 16,
             []u8{ 1, 10, 100 } ** 32,
             []u8{ 1, 10, 100 } ** 64,
