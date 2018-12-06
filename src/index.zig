@@ -32,18 +32,15 @@ pub fn benchmark(comptime B: type) !void {
     if (functions.len == 0)
         @compileError("No benchmarks to run.");
 
-    const max_name_spaces = comptime math.max(max_fn_name_len, "Benchmark".len);
-    const max_args_spaces = comptime math.max(args.len, "Arg".len);
+    const max_name_spaces = comptime math.max(max_fn_name_len + digits(u64, 10, args.len) + 1, "Benchmark".len);
 
     var timer = try time.Timer.start();
     debug.warn("\n");
     debug.warn("Benchmark");
     nTimes(' ', (max_name_spaces - "Benchmark".len) + 1);
-    nTimes(' ', max_args_spaces - "Arg".len);
-    debug.warn("Arg ");
     nTimes(' ', digits(u64, 10, math.maxInt(u64)) - "Mean(ns)".len);
     debug.warn("Mean(ns)\n");
-    nTimes('-', max_name_spaces + max_args_spaces + digits(u64, 10, math.maxInt(u64)) + 2);
+    nTimes('-', max_name_spaces + digits(u64, 10, math.maxInt(u64)) + 1);
     debug.warn("\n");
 
     inline for (functions) |def| {
@@ -66,10 +63,8 @@ pub fn benchmark(comptime B: type) !void {
 
             const runtime_mean = @intCast(u64, runtime_sum / iterations);
 
-            debug.warn("{}", def.name);
-            nTimes(' ', (max_name_spaces - def.name.len) + 1);
-            nTimes(' ', max_args_spaces - digits(usize, 10, index));
-            debug.warn("{} ", index);
+            debug.warn("{}.{}", def.name, index);
+            nTimes(' ', (max_name_spaces - (def.name.len + digits(u64, 10, index) + 1)) + 1);
             nTimes(' ', digits(u64, 10, math.maxInt(u64)) - digits(u64, 10, runtime_mean));
             debug.warn("{}\n", runtime_mean);
         }
