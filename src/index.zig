@@ -14,24 +14,26 @@ const Def = builtin.TypeInfo.Definition;
 pub fn benchmark(comptime B: type) !void {
     const args = if (getDef(B, "args")) |_| B.args else []void{{}};
     const iterations: u32 = if (getDef(B, "iterations")) |_| B.iterations else 100000;
+
+    comptime var max_fn_name_len = 0;
     const functions = comptime blk: {
         var res: []const Def = []Def{};
         for (meta.definitions(B)) |def| {
             if (def.data != builtin.TypeInfo.Definition.Data.Fn)
                 continue;
 
+            if (max_fn_name_len < def.name.len)
+                max_fn_name_len = def.name.len;
             res = res ++ []Def{def};
         }
 
         break :blk res;
     };
-    if (functions.len == 0) {
-        debug.warn("\nNo benchmarks to run.\n");
-    }
+    if (functions.len == 0)
+        @compileError("No benchmarks to run.");
 
-    const max_fn_name_len = comptime max(Def, functions, defNameLessThan).?.name.len;
-    const max_name_spaces = math.max(max_fn_name_len, "Benchmark".len);
-    const max_args_spaces = math.max(args.len, "Arg".len);
+    const max_name_spaces = comptime math.max(max_fn_name_len, "Benchmark".len);
+    const max_args_spaces = comptime math.max(args.len, "Arg".len);
 
     var timer = try time.Timer.start();
     debug.warn("\n");
@@ -109,28 +111,6 @@ fn getDef(comptime T: type, name: []const u8) ?builtin.TypeInfo.Definition {
     }
 
     return null;
-}
-
-fn max(comptime T: type, slice: []const T, lessThan: fn (T, T) bool) ?T {
-    const i = maxIndex(T, slice, lessThan) orelse return null;
-    return slice[i];
-}
-
-fn maxIndex(comptime T: type, slice: []const T, lessThan: fn (T, T) bool) ?usize {
-    if (slice.len == 0)
-        return null;
-
-    var res: usize = 0;
-    for (slice[1..]) |_, i| {
-        if (lessThan(slice[res], slice[i + 1]))
-            res = i + 1;
-    }
-
-    return res;
-}
-
-fn defNameLessThan(comptime a: Def, comptime b: Def) bool {
-    return mem.lessThan(u8, a.name, b.name);
 }
 
 test "benchmark" {
