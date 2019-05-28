@@ -6,14 +6,13 @@ const io = std.io;
 const math = std.math;
 const mem = std.mem;
 const meta = std.meta;
-const os = std.os;
-const time = os.time;
+const time = std.time;
 
 const Def = builtin.TypeInfo.Definition;
 
 pub fn benchmark(comptime B: type) !void {
-    const args = if (getDef(B, "args")) |_| B.args else []void{{}};
-    const iterations: u32 = if (getDef(B, "iterations")) |_| B.iterations else 100000;
+    const args = if (@hasDecl(B, "args")) B.args else []void{{}};
+    const iterations: u32 = if (@hasDecl(B, "iterations")) B.iterations else 100000;
 
     comptime var max_fn_name_len = 0;
     const functions = comptime blk: {
@@ -97,15 +96,6 @@ fn nTimes(c: u8, times: usize) void {
     var i: usize = 0;
     while (i < times) : (i += 1)
         debug.warn("{c}", c);
-}
-
-fn getDef(comptime T: type, name: []const u8) ?builtin.TypeInfo.Definition {
-    for (@typeInfo(T).Struct.defs) |def| {
-        if (mem.eql(u8, def.name, name))
-            return def;
-    }
-
-    return null;
 }
 
 test "benchmark" {
