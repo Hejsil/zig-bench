@@ -8,7 +8,7 @@ const mem = std.mem;
 const meta = std.meta;
 const time = std.time;
 
-const Def = builtin.TypeInfo.Definition;
+const Decl = builtin.TypeInfo.Declaration;
 
 pub fn benchmark(comptime B: type) !void {
     const args = if (@hasDecl(B, "args")) B.args else []void{{}};
@@ -16,14 +16,14 @@ pub fn benchmark(comptime B: type) !void {
 
     comptime var max_fn_name_len = 0;
     const functions = comptime blk: {
-        var res: []const Def = []Def{};
-        for (meta.definitions(B)) |def| {
-            if (def.data != builtin.TypeInfo.Definition.Data.Fn)
+        var res: []const Decl = []Decl{};
+        for (meta.declarations(B)) |decl| {
+            if (decl.data != Decl.Data.Fn)
                 continue;
 
-            if (max_fn_name_len < def.name.len)
-                max_fn_name_len = def.name.len;
-            res = res ++ []Def{def};
+            if (max_fn_name_len < decl.name.len)
+                max_fn_name_len = decl.name.len;
+            res = res ++ []Decl{decl};
         }
 
         break :blk res;
