@@ -11,19 +11,19 @@ const time = std.time;
 const Decl = builtin.TypeInfo.Declaration;
 
 pub fn benchmark(comptime B: type) !void {
-    const args = if (@hasDecl(B, "args")) B.args else []void{{}};
+    const args = if (@hasDecl(B, "args")) B.args else [_]void{{}};
     const iterations: u32 = if (@hasDecl(B, "iterations")) B.iterations else 100000;
 
     comptime var max_fn_name_len = 0;
     const functions = comptime blk: {
-        var res: []const Decl = []Decl{};
+        var res: []const Decl = [_]Decl{};
         for (meta.declarations(B)) |decl| {
             if (decl.data != Decl.Data.Fn)
                 continue;
 
             if (max_fn_name_len < decl.name.len)
                 max_fn_name_len = decl.name.len;
-            res = res ++ []Decl{decl};
+            res = res ++ [_]Decl{decl};
         }
 
         break :blk res;
@@ -103,13 +103,13 @@ test "benchmark" {
         // The functions will be benchmarked with the following inputs.
         // If not present, then it is assumed that the functions
         // take no input.
-        const args = [][]const u8{
-            []u8{ 1, 10, 100 } ** 16,
-            []u8{ 1, 10, 100 } ** 32,
-            []u8{ 1, 10, 100 } ** 64,
-            []u8{ 1, 10, 100 } ** 128,
-            []u8{ 1, 10, 100 } ** 256,
-            []u8{ 1, 10, 100 } ** 512,
+        const args = [_][]const u8{
+            [_]u8{ 1, 10, 100 } ** 16,
+            [_]u8{ 1, 10, 100 } ** 32,
+            [_]u8{ 1, 10, 100 } ** 64,
+            [_]u8{ 1, 10, 100 } ** 128,
+            [_]u8{ 1, 10, 100 } ** 256,
+            [_]u8{ 1, 10, 100 } ** 512,
         };
 
         // How many iterations to run each benchmark.
