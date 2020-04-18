@@ -16,7 +16,7 @@ pub fn benchmark(comptime B: type) !void {
 
     comptime var max_fn_name_len = 0;
     const functions = comptime blk: {
-        var res: []const Decl = [_]Decl{};
+        var res: []const Decl = &[_]Decl{};
         for (meta.declarations(B)) |decl| {
             if (decl.data != Decl.Data.Fn)
                 continue;
@@ -34,13 +34,13 @@ pub fn benchmark(comptime B: type) !void {
     const max_name_spaces = comptime math.max(max_fn_name_len + digits(u64, 10, args.len) + 1, "Benchmark".len);
 
     var timer = try time.Timer.start();
-    debug.warn("\n");
-    debug.warn("Benchmark");
+    debug.warn("\n", .{});
+    debug.warn("Benchmark", .{});
     nTimes(' ', (max_name_spaces - "Benchmark".len) + 1);
     nTimes(' ', digits(u64, 10, math.maxInt(u64)) - "Mean(ns)".len);
-    debug.warn("Mean(ns)\n");
+    debug.warn("Mean(ns)\n", .{});
     nTimes('-', max_name_spaces + digits(u64, 10, math.maxInt(u64)) + 1);
-    debug.warn("\n");
+    debug.warn("\n", .{});
 
     inline for (functions) |def| {
         for (args) |arg, index| {
@@ -50,9 +50,13 @@ pub fn benchmark(comptime B: type) !void {
             while (i < iterations) : (i += 1) {
                 timer.reset();
 
-                const res = switch (@typeOf(arg)) {
-                    void => @noInlineCall(@field(B, def.name)),
-                    else => @noInlineCall(@field(B, def.name), arg),
+                const res = switch (@TypeOf(arg)) {
+                    void => @call(.{ .modifier = .never_inline }, @field(B, def.name), .{}),
+                    else => @field(B, def.name)(arg),
+
+                    // Compiler is being a bitch. Idk why it gives this error:
+                    // error: assign to constant
+                    //else => @call(.{ .modifier = .never_inline }, @field(B, def.name), .{arg}),
                 };
 
                 const runtime = timer.read();
@@ -62,17 +66,17 @@ pub fn benchmark(comptime B: type) !void {
 
             const runtime_mean = @intCast(u64, runtime_sum / iterations);
 
-            debug.warn("{}.{}", def.name, index);
+            debug.warn("{}.{}", .{ def.name, index });
             nTimes(' ', (max_name_spaces - (def.name.len + digits(u64, 10, index) + 1)) + 1);
             nTimes(' ', digits(u64, 10, math.maxInt(u64)) - digits(u64, 10, runtime_mean));
-            debug.warn("{}\n", runtime_mean);
+            debug.warn("{}\n", .{runtime_mean});
         }
     }
 }
 
 /// Pretend to use the value so the optimizer cant optimize it out.
 fn doNotOptimize(val: var) void {
-    const T = @typeOf(val);
+    const T = @TypeOf(val);
     var store: T = undefined;
     @ptrCast(*volatile T, &store).* = val;
 }
@@ -95,7 +99,7 @@ fn digits(comptime N: type, comptime base: comptime_int, n: N) usize {
 fn nTimes(c: u8, times: usize) void {
     var i: usize = 0;
     while (i < times) : (i += 1)
-        debug.warn("{c}", c);
+        debug.warn("{c}", .{c});
 }
 
 test "benchmark" {
@@ -104,12 +108,12 @@ test "benchmark" {
         // If not present, then it is assumed that the functions
         // take no input.
         const args = [_][]const u8{
-            [_]u8{ 1, 10, 100 } ** 16,
-            [_]u8{ 1, 10, 100 } ** 32,
-            [_]u8{ 1, 10, 100 } ** 64,
-            [_]u8{ 1, 10, 100 } ** 128,
-            [_]u8{ 1, 10, 100 } ** 256,
-            [_]u8{ 1, 10, 100 } ** 512,
+            &([_]u8{ 1, 10, 100 } ** 16),
+            &([_]u8{ 1, 10, 100 } ** 32),
+            &([_]u8{ 1, 10, 100 } ** 64),
+            &([_]u8{ 1, 10, 100 } ** 128),
+            &([_]u8{ 1, 10, 100 } ** 256),
+            &([_]u8{ 1, 10, 100 } ** 512),
         };
 
         // How many iterations to run each benchmark.
@@ -125,7 +129,7 @@ test "benchmark" {
         }
 
         fn sum_stream(slice: []const u8) u64 {
-            var stream = &io.SliceInStream.init(slice).stream;
+            var stream = &io.fixedBufferStream(slice).inStream();
             var res: u64 = 0;
             while (stream.readByte()) |c| {
                 res += c;
