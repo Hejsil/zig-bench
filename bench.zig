@@ -15,15 +15,11 @@ pub fn benchmark(comptime B: type) !void {
     const arg_names = if (@hasDecl(B, "args") and @hasDecl(B, "arg_names")) B.arg_names else [_]u8{};
     const iterations: u32 = if (@hasDecl(B, "iterations")) B.iterations else 100000;
 
-    comptime var max_fn_name_len: usize = 0;
     const functions = comptime blk: {
         var res: []const Decl = &[_]Decl{};
         for (meta.declarations(B)) |decl| {
             if (decl.data != Decl.Data.Fn)
                 continue;
-
-            if (max_fn_name_len < decl.name.len)
-                max_fn_name_len = decl.name.len;
             res = res ++ [_]Decl{decl};
         }
 
@@ -32,29 +28,29 @@ pub fn benchmark(comptime B: type) !void {
     if (functions.len == 0)
         @compileError("No benchmarks to run.");
 
-    const has_arg_names = arg_names.len > 0;
-    var max_name_spaces: usize = undefined;
-    if (has_arg_names) {
-        comptime var longest: usize = 0;
-        inline for (args) |_, index| {
-            if (index < arg_names.len and arg_names[index].len > longest) {
-                longest = arg_names[index].len;
+    const min_width = blk: {
+        const stream = io.null_out_stream;
+        var res = [_]u64{ 0, 0 };
+        res = try printBenchmark(stream, res, "Benchmark", "", "Mean(ns)");
+        inline for (functions) |f| {
+            for (args) |_, i| {
+                res = if (i < arg_names.len)
+                    try printBenchmark(stream, res, f.name, arg_names[i], math.maxInt(u64))
+                else
+                    try printBenchmark(stream, res, f.name, i, math.maxInt(u64));
             }
         }
-        max_name_spaces = comptime math.max(max_fn_name_len + longest + 1, "Benchmark".len);
-    } else {
-        max_name_spaces = comptime math.max(max_fn_name_len + digits(u64, 10, args.len) + 1, "Benchmark".len);
-    }
+        break :blk res;
+    };
+
+    const stderr = std.io.getStdErr().outStream();
+    try stderr.writeAll("\n");
+    _ = try printBenchmark(stderr, min_width, "Benchmark", "", "Mean(ns)");
+    try stderr.writeAll("\n");
+    try stderr.writeByteNTimes('-', min_width[0] + min_width[1] + 1);
+    try stderr.writeAll("\n");
 
     var timer = try time.Timer.start();
-    debug.warn("\n", .{});
-    debug.warn("Benchmark", .{});
-    nTimes(' ', (max_name_spaces - "Benchmark".len) + 1);
-    nTimes(' ', digits(u64, 10, math.maxInt(u64)) - "Mean(ns)".len);
-    debug.warn("Mean(ns)\n", .{});
-    nTimes('-', max_name_spaces + digits(u64, 10, math.maxInt(u64)) + 1);
-    debug.warn("\n", .{});
-
     inline for (functions) |def| {
         for (args) |arg, index| {
             var runtime_sum: u128 = 0;
@@ -64,36 +60,60 @@ pub fn benchmark(comptime B: type) !void {
                 timer.reset();
 
                 const res = switch (@TypeOf(arg)) {
-                    void => @call(.{ .modifier = .never_inline }, @field(B, def.name), .{}),
+                    void => @field(B, def.name)(),
                     else => @field(B, def.name)(arg),
-
-                    // Compiler is being a bitch. Idk why it gives this error:
-                    // error: assign to constant
-                    //else => @call(.{ .modifier = .never_inline }, @field(B, def.name), .{arg}),
                 };
                 const runtime = timer.read();
                 runtime_sum += runtime;
                 doNotOptimize(res);
             }
 
-            var run_name_length: usize = undefined;
-
-            if (has_arg_names and index < arg_names.len) {
-                const input_name = arg_names[index];
-                debug.warn("{}.{}", .{ def.name, input_name });
-                // {func}.{input}
-                run_name_length = 1 + def.name.len + input_name.len;
+            const runtime_mean = runtime_sum / iterations;
+            if (index < arg_names.len) {
+                _ = try printBenchmark(stderr, min_width, def.name, arg_names[index], runtime_mean);
             } else {
-                debug.warn("{}.{}", .{ def.name, index });
-                run_name_length = 1 + def.name.len + digits(u64, 10, index);
+                _ = try printBenchmark(stderr, min_width, def.name, index, runtime_mean);
             }
-
-            const runtime_mean = @intCast(u64, runtime_sum / iterations);
-            nTimes(' ', (max_name_spaces - run_name_length) + 1);
-            nTimes(' ', digits(u64, 10, math.maxInt(u64)) - digits(u64, 10, runtime_mean));
-            debug.warn("{}\n", .{runtime_mean});
+            try stderr.writeAll("\n");
         }
     }
+}
+
+fn printBenchmark(stream: var, min_widths: [2]u64, func_name: []const u8, arg_name: var, runtime: var) ![2]u64 {
+    const name_len = try printBenchmarkName(stream, min_widths[0], func_name, arg_name);
+    try stream.writeAll(" ");
+    const runtime_len = try printRuntime(stream, min_widths[1], runtime);
+    return [_]u64{ name_len, runtime_len };
+}
+
+fn printBenchmarkName(stream: var, min_width: u64, func_name: []const u8, arg_name: var) !u64 {
+    const arg_len = blk: {
+        var cos = io.countingOutStream(io.null_out_stream);
+        try cos.outStream().print("{}", .{arg_name});
+        break :blk cos.bytes_written;
+    };
+
+    var cos = io.countingOutStream(stream);
+    const cos_stream = cos.outStream();
+    try cos_stream.print("{}", .{func_name});
+    if (arg_len != 0)
+        try cos_stream.print("({})", .{arg_name});
+    try cos_stream.writeByteNTimes(' ', math.sub(u64, min_width, cos.bytes_written) catch 0);
+    return cos.bytes_written;
+}
+
+fn printRuntime(stream: var, min_width: u64, runtime: var) !u64 {
+    const runtime_len = blk: {
+        var cos = io.countingOutStream(io.null_out_stream);
+        try cos.outStream().print("{}", .{runtime});
+        break :blk cos.bytes_written;
+    };
+
+    var cos = io.countingOutStream(stream);
+    const cos_stream = cos.outStream();
+    try cos_stream.writeByteNTimes(' ', math.sub(u64, min_width, runtime_len) catch 0);
+    try cos_stream.print("{}", .{runtime});
+    return cos.bytes_written;
 }
 
 /// Pretend to use the value so the optimizer cant optimize it out.
