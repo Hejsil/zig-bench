@@ -47,7 +47,9 @@ pub fn benchmark(comptime B: type) !void {
     try stderr.writeAll("\n");
     _ = try printBenchmark(stderr, min_width, "Benchmark", "", "Mean(ns)");
     try stderr.writeAll("\n");
-    try stderr.writeByteNTimes('-', min_width[0] + min_width[1] + 1);
+    for (min_width) |w|
+        try stderr.writeByteNTimes('-', w);
+    try stderr.writeByteNTimes('-', min_width.len - 1);
     try stderr.writeAll("\n");
 
     var timer = try time.Timer.start();
@@ -80,39 +82,30 @@ pub fn benchmark(comptime B: type) !void {
 }
 
 fn printBenchmark(stream: var, min_widths: [2]u64, func_name: []const u8, arg_name: var, runtime: var) ![2]u64 {
-    const name_len = try printBenchmarkName(stream, min_widths[0], func_name, arg_name);
+    const arg_len = countingPrint("{}", .{arg_name});
+    const runtime_len_without_pad = countingPrint("{}", .{runtime});
+
+    var cos = io.countingOutStream(stream);
+    const cos_stream = cos.outStream();
+    try cos_stream.print("{}{}{}{}", .{ func_name, "("[0..@boolToInt(arg_len != 0)], arg_name, ")"[0..@boolToInt(arg_len != 0)] });
+    try cos_stream.writeByteNTimes(' ', math.sub(u64, min_widths[0], cos.bytes_written) catch 0);
+    const name_len = cos.bytes_written;
+
     try stream.writeAll(" ");
-    const runtime_len = try printRuntime(stream, min_widths[1], runtime);
+
+    cos = io.countingOutStream(stream);
+    try cos_stream.writeByteNTimes(' ', math.sub(u64, min_widths[1], runtime_len_without_pad) catch 0);
+    try cos_stream.print("{}", .{runtime});
+    const runtime_len = cos.bytes_written;
+
     return [_]u64{ name_len, runtime_len };
 }
 
-fn printBenchmarkName(stream: var, min_width: u64, func_name: []const u8, arg_name: var) !u64 {
-    const arg_len = blk: {
-        var cos = io.countingOutStream(io.null_out_stream);
-        try cos.outStream().print("{}", .{arg_name});
-        break :blk cos.bytes_written;
-    };
-
-    var cos = io.countingOutStream(stream);
-    const cos_stream = cos.outStream();
-    try cos_stream.print("{}", .{func_name});
-    if (arg_len != 0)
-        try cos_stream.print("({})", .{arg_name});
-    try cos_stream.writeByteNTimes(' ', math.sub(u64, min_width, cos.bytes_written) catch 0);
-    return cos.bytes_written;
-}
-
-fn printRuntime(stream: var, min_width: u64, runtime: var) !u64 {
-    const runtime_len = blk: {
-        var cos = io.countingOutStream(io.null_out_stream);
-        try cos.outStream().print("{}", .{runtime});
-        break :blk cos.bytes_written;
-    };
-
-    var cos = io.countingOutStream(stream);
-    const cos_stream = cos.outStream();
-    try cos_stream.writeByteNTimes(' ', math.sub(u64, min_width, runtime_len) catch 0);
-    try cos_stream.print("{}", .{runtime});
+/// Returns the number of bytes that would be written to a stream
+/// for a given format string and arguments.
+fn countingPrint(comptime fmt: []const u8, args: var) u64 {
+    var cos = io.countingOutStream(io.null_out_stream);
+    cos.outStream().print("{}", args) catch unreachable;
     return cos.bytes_written;
 }
 
