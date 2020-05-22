@@ -13,7 +13,9 @@ const Decl = builtin.TypeInfo.Declaration;
 pub fn benchmark(comptime B: type) !void {
     const args = if (@hasDecl(B, "args")) B.args else [_]void{{}};
     const arg_names = if (@hasDecl(B, "args") and @hasDecl(B, "arg_names")) B.arg_names else [_]u8{};
-    const iterations: u32 = if (@hasDecl(B, "iterations")) B.iterations else 100000;
+    const min_iterations: u32 = if (@hasDecl(B, "min_iterations")) B.min_iterations else 10000;
+    const max_iterations: u32 = if (@hasDecl(B, "max_iterations")) B.max_iterations else 100000;
+    const max_time = 500 * time.millisecond;
 
     const functions = comptime blk: {
         var res: []const Decl = &[_]Decl{};
@@ -30,14 +32,14 @@ pub fn benchmark(comptime B: type) !void {
 
     const min_width = blk: {
         const stream = io.null_out_stream;
-        var res = [_]u64{ 0, 0 };
-        res = try printBenchmark(stream, res, "Benchmark", "", "Mean(ns)");
+        var res = [_]u64{ 0, 0, 0 };
+        res = try printBenchmark(stream, res, "Benchmark", "", "Iterations", "Mean(ns)");
         inline for (functions) |f| {
             for (args) |_, i| {
                 res = if (i < arg_names.len)
-                    try printBenchmark(stream, res, f.name, arg_names[i], math.maxInt(u64))
+                    try printBenchmark(stream, res, f.name, arg_names[i], math.maxInt(u32), math.maxInt(u32))
                 else
-                    try printBenchmark(stream, res, f.name, i, math.maxInt(u64));
+                    try printBenchmark(stream, res, f.name, i, math.maxInt(u32), math.maxInt(u32));
             }
         }
         break :blk res;
@@ -45,7 +47,7 @@ pub fn benchmark(comptime B: type) !void {
 
     const stderr = std.io.getStdErr().outStream();
     try stderr.writeAll("\n");
-    _ = try printBenchmark(stderr, min_width, "Benchmark", "", "Mean(ns)");
+    _ = try printBenchmark(stderr, min_width, "Benchmark", "", "Iterations", "Mean(ns)");
     try stderr.writeAll("\n");
     for (min_width) |w|
         try stderr.writeByteNTimes('-', w);
@@ -58,7 +60,7 @@ pub fn benchmark(comptime B: type) !void {
             var runtime_sum: u128 = 0;
 
             var i: usize = 0;
-            while (i < iterations) : (i += 1) {
+            while (i < min_iterations or (i < max_iterations and runtime_sum < max_time)) : (i += 1) {
                 timer.reset();
 
                 const res = switch (@TypeOf(arg)) {
@@ -70,42 +72,51 @@ pub fn benchmark(comptime B: type) !void {
                 doNotOptimize(res);
             }
 
-            const runtime_mean = runtime_sum / iterations;
+            const runtime_mean = runtime_sum / i;
             if (index < arg_names.len) {
-                _ = try printBenchmark(stderr, min_width, def.name, arg_names[index], runtime_mean);
+                _ = try printBenchmark(stderr, min_width, def.name, arg_names[index], i, runtime_mean);
             } else {
-                _ = try printBenchmark(stderr, min_width, def.name, index, runtime_mean);
+                _ = try printBenchmark(stderr, min_width, def.name, index, i, runtime_mean);
             }
             try stderr.writeAll("\n");
         }
     }
 }
 
-fn printBenchmark(stream: var, min_widths: [2]u64, func_name: []const u8, arg_name: var, runtime: var) ![2]u64 {
+fn printBenchmark(stream: var, min_widths: [3]u64, func_name: []const u8, arg_name: var, iterations: var, runtime: var) ![3]u64 {
     const arg_len = countingPrint("{}", .{arg_name});
-    const runtime_len_without_pad = countingPrint("{}", .{runtime});
+    const name_len = try alignedPrint(stream, .left, min_widths[0], "{}{}{}{}", .{
+        func_name,
+        "("[0..@boolToInt(arg_len != 0)],
+        arg_name,
+        ")"[0..@boolToInt(arg_len != 0)],
+    });
+    try stream.writeAll(" ");
+    const it_len = try alignedPrint(stream, .right, min_widths[1], "{}", .{iterations});
+    try stream.writeAll(" ");
+    const runtime_len = try alignedPrint(stream, .right, min_widths[2], "{}", .{runtime});
+
+    return [_]u64{ name_len, it_len, runtime_len };
+}
+
+fn alignedPrint(stream: var, dir: enum { left, right }, width: u64, comptime fmt: []const u8, args: var) !u64 {
+    const value_len = countingPrint(fmt, args);
 
     var cos = io.countingOutStream(stream);
     const cos_stream = cos.outStream();
-    try cos_stream.print("{}{}{}{}", .{ func_name, "("[0..@boolToInt(arg_len != 0)], arg_name, ")"[0..@boolToInt(arg_len != 0)] });
-    try cos_stream.writeByteNTimes(' ', math.sub(u64, min_widths[0], cos.bytes_written) catch 0);
-    const name_len = cos.bytes_written;
-
-    try stream.writeAll(" ");
-
-    cos = io.countingOutStream(stream);
-    try cos_stream.writeByteNTimes(' ', math.sub(u64, min_widths[1], runtime_len_without_pad) catch 0);
-    try cos_stream.print("{}", .{runtime});
-    const runtime_len = cos.bytes_written;
-
-    return [_]u64{ name_len, runtime_len };
+    if (dir == .right)
+        try cos_stream.writeByteNTimes(' ', math.sub(u64, width, value_len) catch 0);
+    try cos_stream.print(fmt, args);
+    if (dir == .left)
+        try cos_stream.writeByteNTimes(' ', math.sub(u64, width, value_len) catch 0);
+    return cos.bytes_written;
 }
 
 /// Returns the number of bytes that would be written to a stream
 /// for a given format string and arguments.
 fn countingPrint(comptime fmt: []const u8, args: var) u64 {
     var cos = io.countingOutStream(io.null_out_stream);
-    cos.outStream().print("{}", args) catch unreachable;
+    cos.outStream().print(fmt, args) catch unreachable;
     return cos.bytes_written;
 }
 
@@ -114,27 +125,6 @@ fn doNotOptimize(val: var) void {
     const T = @TypeOf(val);
     var store: T = undefined;
     @ptrCast(*volatile T, &store).* = val;
-}
-
-fn digits(comptime N: type, comptime base: comptime_int, n: N) usize {
-    comptime var res = 1;
-    comptime var check = base;
-
-    inline while (check <= math.maxInt(N)) : ({
-        check *= base;
-        res += 1;
-    }) {
-        if (n < check)
-            return res;
-    }
-
-    return res;
-}
-
-fn nTimes(c: u8, times: usize) void {
-    var i: usize = 0;
-    while (i < times) : (i += 1)
-        debug.warn("{c}", .{c});
 }
 
 test "benchmark" {
@@ -165,7 +155,8 @@ test "benchmark" {
 
         // How many iterations to run each benchmark.
         // If not present then a default will be used.
-        const iterations = 100000;
+        const min_iterations = 1000;
+        const max_iterations = 100000;
 
         fn sum_slice(slice: []const u8) u64 {
             var res: u64 = 0;
