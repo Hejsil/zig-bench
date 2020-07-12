@@ -83,7 +83,7 @@ pub fn benchmark(comptime B: type) !void {
     }
 }
 
-fn printBenchmark(writer: var, min_widths: [3]u64, func_name: []const u8, arg_name: var, iterations: var, runtime: var) ![3]u64 {
+fn printBenchmark(writer: anytype, min_widths: [3]u64, func_name: []const u8, arg_name: anytype, iterations: anytype, runtime: anytype) ![3]u64 {
     const arg_len = countingPrint("{}", .{arg_name});
     const name_len = try alignedPrint(writer, .left, min_widths[0], "{}{}{}{}", .{
         func_name,
@@ -99,7 +99,7 @@ fn printBenchmark(writer: var, min_widths: [3]u64, func_name: []const u8, arg_na
     return [_]u64{ name_len, it_len, runtime_len };
 }
 
-fn alignedPrint(writer: var, dir: enum { left, right }, width: u64, comptime fmt: []const u8, args: var) !u64 {
+fn alignedPrint(writer: anytype, dir: enum { left, right }, width: u64, comptime fmt: []const u8, args: anytype) !u64 {
     const value_len = countingPrint(fmt, args);
 
     var cow = io.countingWriter(writer);
@@ -113,14 +113,14 @@ fn alignedPrint(writer: var, dir: enum { left, right }, width: u64, comptime fmt
 
 /// Returns the number of bytes that would be written to a writer
 /// for a given format string and arguments.
-fn countingPrint(comptime fmt: []const u8, args: var) u64 {
+fn countingPrint(comptime fmt: []const u8, args: anytype) u64 {
     var cow = io.countingWriter(io.null_writer);
     cow.writer().print(fmt, args) catch unreachable;
     return cow.bytes_written;
 }
 
 /// Pretend to use the value so the optimizer cant optimize it out.
-fn doNotOptimize(val: var) void {
+fn doNotOptimize(val: anytype) void {
     const T = @TypeOf(val);
     var store: T = undefined;
     @ptrCast(*volatile T, &store).* = val;
