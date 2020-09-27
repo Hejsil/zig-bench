@@ -176,3 +176,33 @@ test "benchmark" {
         }
     });
 }
+
+test "benchmark generics" {
+    try benchmark(struct {
+        const Vec = @import("std").meta.Vector;
+
+        pub const args = [_]type{
+            Vec(4, f16),  Vec(4, f32),  Vec(4, f64),
+            Vec(8, f16),  Vec(8, f32),  Vec(8, f64),
+            Vec(16, f16), Vec(16, f32), Vec(16, f64),
+        };
+
+        pub const arg_names = [_][]const u8{
+            "vec4f16",  "vec4f32",  "vec4f64",
+            "vec8f16",  "vec8f32",  "vec8f64",
+            "vec16f16", "vec16f32", "vec16f64",
+        };
+
+        pub fn sum_vectors(comptime T: type) T {
+            const info = @typeInfo(T).Vector;
+            const one = @splat(info.len, @as(info.child, 1));
+            var vecs: [512]T = [1]T{one} ** 512;
+            var res = one;
+
+            for (vecs) |vec| {
+                res += vec;
+            }
+            return res;
+        }
+    });
+}
