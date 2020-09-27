@@ -35,7 +35,7 @@ pub fn benchmark(comptime B: type) !void {
         var res = [_]u64{ 0, 0, 0 };
         res = try printBenchmark(writer, res, "Benchmark", "", "Iterations", "Mean(ns)");
         inline for (functions) |f| {
-            for (args) |_, i| {
+            inline for (args) |_, i| {
                 res = if (i < arg_names.len)
                     try printBenchmark(writer, res, f.name, arg_names[i], math.maxInt(u32), math.maxInt(u32))
                 else
@@ -56,7 +56,7 @@ pub fn benchmark(comptime B: type) !void {
 
     var timer = try time.Timer.start();
     inline for (functions) |def| {
-        for (args) |arg, index| {
+        inline for (args) |arg, index| {
             var runtime_sum: u128 = 0;
 
             var i: usize = 0;
