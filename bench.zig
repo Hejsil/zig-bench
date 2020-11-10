@@ -70,7 +70,7 @@ pub fn benchmark(comptime B: type) !void {
                 };
                 const runtime = timer.read();
                 runtime_sum += runtime;
-                doNotOptimize(res);
+                std.mem.doNotOptimizeAway(res);
             }
 
             const runtime_mean = runtime_sum / i;
@@ -110,13 +110,6 @@ fn alignedPrint(writer: anytype, dir: enum { left, right }, width: u64, comptime
     if (dir == .left)
         try cow.writer().writeByteNTimes(' ', math.sub(u64, width, value_len) catch 0);
     return cow.bytes_written;
-}
-
-/// Pretend to use the value so the optimizer cant optimize it out.
-fn doNotOptimize(val: anytype) void {
-    const T = @TypeOf(val);
-    var store: T = undefined;
-    @ptrCast(*volatile T, &store).* = val;
 }
 
 test "benchmark" {
