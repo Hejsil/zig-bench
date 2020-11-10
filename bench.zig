@@ -15,7 +15,7 @@ pub fn benchmark(comptime B: type) !void {
     const arg_names = if (@hasDecl(B, "args") and @hasDecl(B, "arg_names")) B.arg_names else [_]u8{};
     const min_iterations: u32 = if (@hasDecl(B, "min_iterations")) B.min_iterations else 10000;
     const max_iterations: u32 = if (@hasDecl(B, "max_iterations")) B.max_iterations else 100000;
-    const max_time = 500 * time.millisecond;
+    const max_time = 500 * time.ns_per_ms;
 
     const functions = comptime blk: {
         var res: []const Decl = &[_]Decl{};
@@ -84,7 +84,7 @@ pub fn benchmark(comptime B: type) !void {
     }
 }
 
-fn printBenchmark(stream: var, min_widths: [3]u64, func_name: []const u8, arg_name: var, iterations: var, runtime: var) ![3]u64 {
+fn printBenchmark(stream: anytype, min_widths: [3]u64, func_name: []const u8, arg_name: anytype, iterations: anytype, runtime: anytype) ![3]u64 {
     const arg_len = countingPrint("{}", .{arg_name});
     const name_len = try alignedPrint(stream, .left, min_widths[0], "{}{}{}{}", .{
         func_name,
@@ -100,7 +100,7 @@ fn printBenchmark(stream: var, min_widths: [3]u64, func_name: []const u8, arg_na
     return [_]u64{ name_len, it_len, runtime_len };
 }
 
-fn alignedPrint(stream: var, dir: enum { left, right }, width: u64, comptime fmt: []const u8, args: var) !u64 {
+fn alignedPrint(stream: anytype, dir: enum { left, right }, width: u64, comptime fmt: []const u8, args: anytype) !u64 {
     const value_len = countingPrint(fmt, args);
 
     var cos = io.countingOutStream(stream);
@@ -115,14 +115,14 @@ fn alignedPrint(stream: var, dir: enum { left, right }, width: u64, comptime fmt
 
 /// Returns the number of bytes that would be written to a stream
 /// for a given format string and arguments.
-fn countingPrint(comptime fmt: []const u8, args: var) u64 {
+fn countingPrint(comptime fmt: []const u8, args: anytype) u64 {
     var cos = io.countingOutStream(io.null_out_stream);
     cos.outStream().print(fmt, args) catch unreachable;
     return cos.bytes_written;
 }
 
 /// Pretend to use the value so the optimizer cant optimize it out.
-fn doNotOptimize(val: var) void {
+fn doNotOptimize(val: anytype) void {
     const T = @TypeOf(val);
     var store: T = undefined;
     @ptrCast(*volatile T, &store).* = val;
