@@ -70,7 +70,7 @@ pub fn benchmark(comptime B: type) !void {
                 };
                 const runtime = timer.read();
                 runtime_sum += runtime;
-                doNotOptimize(res);
+                std.mem.doNotOptimizeAway(res);
             }
 
             const runtime_mean = runtime_sum / i;
@@ -119,13 +119,6 @@ fn countingPrint(comptime fmt: []const u8, args: anytype) u64 {
     var cos = io.countingOutStream(io.null_out_stream);
     cos.outStream().print(fmt, args) catch unreachable;
     return cos.bytes_written;
-}
-
-/// Pretend to use the value so the optimizer cant optimize it out.
-fn doNotOptimize(val: anytype) void {
-    const T = @TypeOf(val);
-    var store: T = undefined;
-    @ptrCast(*volatile T, &store).* = val;
 }
 
 test "benchmark" {
