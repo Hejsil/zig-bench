@@ -31,22 +31,22 @@ pub fn benchmark(comptime B: type) !void {
         @compileError("No benchmarks to run.");
 
     const min_width = blk: {
-        const stream = io.null_out_stream;
+        const writer = io.null_writer;
         var res = [_]u64{ 0, 0, 0 };
-        res = try printBenchmark(stream, res, "Benchmark", "", "Iterations", "Mean(ns)");
+        res = try printBenchmark(writer, res, "Benchmark", "", "Iterations", "Mean(ns)");
         inline for (functions) |f| {
             var i: usize = 0;
             while (i < args.len) : (i += 1) {
                 res = if (i < arg_names.len)
-                    try printBenchmark(stream, res, f.name, arg_names[i], math.maxInt(u32), math.maxInt(u32))
+                    try printBenchmark(writer, res, f.name, arg_names[i], math.maxInt(u32), math.maxInt(u32))
                 else
-                    try printBenchmark(stream, res, f.name, i, math.maxInt(u32), math.maxInt(u32));
+                    try printBenchmark(writer, res, f.name, i, math.maxInt(u32), math.maxInt(u32));
             }
         }
         break :blk res;
     };
 
-    const stderr = std.io.getStdErr().outStream();
+    const stderr = std.io.getStdErr().writer();
     try stderr.writeAll("\n");
     _ = try printBenchmark(stderr, min_width, "Benchmark", "", "Iterations", "Mean(ns)");
     try stderr.writeAll("\n");
@@ -84,41 +84,32 @@ pub fn benchmark(comptime B: type) !void {
     }
 }
 
-fn printBenchmark(stream: anytype, min_widths: [3]u64, func_name: []const u8, arg_name: anytype, iterations: anytype, runtime: anytype) ![3]u64 {
-    const arg_len = countingPrint("{}", .{arg_name});
-    const name_len = try alignedPrint(stream, .left, min_widths[0], "{}{}{}{}", .{
+fn printBenchmark(writer: anytype, min_widths: [3]u64, func_name: []const u8, arg_name: anytype, iterations: anytype, runtime: anytype) ![3]u64 {
+    const arg_len = std.fmt.count("{}", .{arg_name});
+    const name_len = try alignedPrint(writer, .left, min_widths[0], "{}{}{}{}", .{
         func_name,
         "("[0..@boolToInt(arg_len != 0)],
         arg_name,
         ")"[0..@boolToInt(arg_len != 0)],
     });
-    try stream.writeAll(" ");
-    const it_len = try alignedPrint(stream, .right, min_widths[1], "{}", .{iterations});
-    try stream.writeAll(" ");
-    const runtime_len = try alignedPrint(stream, .right, min_widths[2], "{}", .{runtime});
+    try writer.writeAll(" ");
+    const it_len = try alignedPrint(writer, .right, min_widths[1], "{}", .{iterations});
+    try writer.writeAll(" ");
+    const runtime_len = try alignedPrint(writer, .right, min_widths[2], "{}", .{runtime});
 
     return [_]u64{ name_len, it_len, runtime_len };
 }
 
-fn alignedPrint(stream: anytype, dir: enum { left, right }, width: u64, comptime fmt: []const u8, args: anytype) !u64 {
-    const value_len = countingPrint(fmt, args);
+fn alignedPrint(writer: anytype, dir: enum { left, right }, width: u64, comptime fmt: []const u8, args: anytype) !u64 {
+    const value_len = std.fmt.count(fmt, args);
 
-    var cos = io.countingOutStream(stream);
-    const cos_stream = cos.outStream();
+    var cow = io.countingWriter(writer);
     if (dir == .right)
-        try cos_stream.writeByteNTimes(' ', math.sub(u64, width, value_len) catch 0);
-    try cos_stream.print(fmt, args);
+        try cow.writer().writeByteNTimes(' ', math.sub(u64, width, value_len) catch 0);
+    try cow.writer().print(fmt, args);
     if (dir == .left)
-        try cos_stream.writeByteNTimes(' ', math.sub(u64, width, value_len) catch 0);
-    return cos.bytes_written;
-}
-
-/// Returns the number of bytes that would be written to a stream
-/// for a given format string and arguments.
-fn countingPrint(comptime fmt: []const u8, args: anytype) u64 {
-    var cos = io.countingOutStream(io.null_out_stream);
-    cos.outStream().print(fmt, args) catch unreachable;
-    return cos.bytes_written;
+        try cow.writer().writeByteNTimes(' ', math.sub(u64, width, value_len) catch 0);
+    return cow.bytes_written;
 }
 
 /// Pretend to use the value so the optimizer cant optimize it out.
@@ -167,10 +158,10 @@ test "benchmark" {
             return res;
         }
 
-        fn sum_stream(slice: []const u8) u64 {
-            var stream = &io.fixedBufferStream(slice).inStream();
+        fn sum_reader(slice: []const u8) u64 {
+            var reader = &io.fixedBufferStream(slice).reader();
             var res: u64 = 0;
-            while (stream.readByte()) |c| {
+            while (reader.readByte()) |c| {
                 res += c;
             } else |_| {}
 
