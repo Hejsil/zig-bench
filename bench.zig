@@ -70,7 +70,7 @@ pub fn benchmark(comptime B: type) !void {
                 };
                 const runtime = timer.read();
                 runtime_sum += runtime;
-                std.mem.doNotOptimizeAway(res);
+                std.mem.doNotOptimizeAway(&res);
             }
 
             const runtime_mean = runtime_sum / i;
