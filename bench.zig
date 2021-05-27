@@ -70,7 +70,7 @@ pub fn benchmark(comptime B: type) !void {
                 };
                 const runtime = timer.read();
                 runtime_sum += runtime;
-                doNotOptimize(res);
+                std.mem.doNotOptimizeAway(&res);
             }
 
             const runtime_mean = runtime_sum / i;
@@ -85,7 +85,7 @@ pub fn benchmark(comptime B: type) !void {
 }
 
 fn printBenchmark(writer: anytype, min_widths: [3]u64, func_name: []const u8, arg_name: anytype, iterations: anytype, runtime: anytype) ![3]u64 {
-    const arg_len = countingPrint("{}", .{arg_name});
+    const arg_len = std.fmt.count("{s}", .{arg_name});
     const name_len = try alignedPrint(writer, .left, min_widths[0], "{}{}{}{}", .{
         func_name,
         "("[0..@boolToInt(arg_len != 0)],
@@ -101,7 +101,7 @@ fn printBenchmark(writer: anytype, min_widths: [3]u64, func_name: []const u8, ar
 }
 
 fn alignedPrint(writer: anytype, dir: enum { left, right }, width: u64, comptime fmt: []const u8, args: anytype) !u64 {
-    const value_len = countingPrint(fmt, args);
+    const value_len = std.fmt.count(fmt, args);
 
     var cow = io.countingWriter(writer);
     if (dir == .right)
@@ -110,21 +110,6 @@ fn alignedPrint(writer: anytype, dir: enum { left, right }, width: u64, comptime
     if (dir == .left)
         try cow.writer().writeByteNTimes(' ', math.sub(u64, width, value_len) catch 0);
     return cow.bytes_written;
-}
-
-/// Returns the number of bytes that would be written to a writer
-/// for a given format string and arguments.
-fn countingPrint(comptime fmt: []const u8, args: anytype) u64 {
-    var cow = io.countingWriter(io.null_writer);
-    cow.writer().print(fmt, args) catch unreachable;
-    return cow.bytes_written;
-}
-
-/// Pretend to use the value so the optimizer cant optimize it out.
-fn doNotOptimize(val: anytype) void {
-    const T = @TypeOf(val);
-    var store: T = undefined;
-    @ptrCast(*volatile T, &store).* = val;
 }
 
 test "benchmark" {
