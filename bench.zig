@@ -1,4 +1,3 @@
-const builtin = @import("builtin");
 const std = @import("std");
 
 const debug = std.debug;
@@ -8,13 +7,13 @@ const mem = std.mem;
 const meta = std.meta;
 const time = std.time;
 
-const Decl = builtin.TypeInfo.Declaration;
+const Decl = std.builtin.TypeInfo.Declaration;
 
 pub fn benchmark(comptime B: type) !void {
     const args = if (@hasDecl(B, "args")) B.args else [_]void{{}};
-    const arg_names = if (@hasDecl(B, "args") and @hasDecl(B, "arg_names")) B.arg_names else [_]u8{};
-    const min_iterations: u32 = if (@hasDecl(B, "min_iterations")) B.min_iterations else 10000;
-    const max_iterations: u32 = if (@hasDecl(B, "max_iterations")) B.max_iterations else 100000;
+    const arg_names = if (@hasDecl(B, "arg_names")) B.arg_names else [_]u8{};
+    const min_iterations = if (@hasDecl(B, "min_iterations")) B.min_iterations else 10000;
+    const max_iterations = if (@hasDecl(B, "max_iterations")) B.max_iterations else 100000;
     const max_time = 500 * time.ns_per_ms;
 
     const functions = comptime blk: {
@@ -33,27 +32,45 @@ pub fn benchmark(comptime B: type) !void {
     const min_width = blk: {
         const writer = io.null_writer;
         var res = [_]u64{ 0, 0, 0 };
-        res = try printBenchmark(writer, res, "Benchmark", "", "Iterations", "Mean(ns)");
+        res = try printBenchmark(
+            writer,
+            res,
+            "Benchmark",
+            formatter("{s}", ""),
+            formatter("{s}", "Iterations"),
+            formatter("{s}", "Mean(ns)"),
+        );
         inline for (functions) |f| {
             var i: usize = 0;
             while (i < args.len) : (i += 1) {
-                res = if (i < arg_names.len)
-                    try printBenchmark(writer, res, f.name, arg_names[i], math.maxInt(u32), math.maxInt(u32))
-                else
-                    try printBenchmark(writer, res, f.name, i, math.maxInt(u32), math.maxInt(u32));
+                const max = math.maxInt(u32);
+                res = if (i < arg_names.len) blk2: {
+                    const arg_name = formatter("{s}", arg_names[i]);
+                    break :blk2 try printBenchmark(writer, res, f.name, arg_name, max, max);
+                } else blk2: {
+                    break :blk2 try printBenchmark(writer, res, f.name, i, max, max);
+                };
             }
         }
         break :blk res;
     };
 
-    const stderr = std.io.getStdErr().writer();
+    const stderr = std.io.bufferedWriter(std.io.getStdErr().writer()).writer();
     try stderr.writeAll("\n");
-    _ = try printBenchmark(stderr, min_width, "Benchmark", "", "Iterations", "Mean(ns)");
+    _ = try printBenchmark(
+        stderr,
+        min_width,
+        "Benchmark",
+        formatter("{s}", ""),
+        formatter("{s}", "Iterations"),
+        formatter("{s}", "Mean(ns)"),
+    );
     try stderr.writeAll("\n");
     for (min_width) |w|
         try stderr.writeByteNTimes('-', w);
     try stderr.writeByteNTimes('-', min_width.len - 1);
     try stderr.writeAll("\n");
+    try stderr.context.flush();
 
     var timer = try time.Timer.start();
     inline for (functions) |def| {
@@ -61,7 +78,9 @@ pub fn benchmark(comptime B: type) !void {
             var runtime_sum: u128 = 0;
 
             var i: usize = 0;
-            while (i < min_iterations or (i < max_iterations and runtime_sum < max_time)) : (i += 1) {
+            while (i < min_iterations or
+                (i < max_iterations and runtime_sum < max_time)) : (i += 1)
+            {
                 timer.reset();
 
                 const res = switch (@TypeOf(arg)) {
@@ -75,18 +94,27 @@ pub fn benchmark(comptime B: type) !void {
 
             const runtime_mean = runtime_sum / i;
             if (index < arg_names.len) {
-                _ = try printBenchmark(stderr, min_width, def.name, arg_names[index], i, runtime_mean);
+                const arg_name = formatter("{s}", arg_names[index]);
+                _ = try printBenchmark(stderr, min_width, def.name, arg_name, i, runtime_mean);
             } else {
                 _ = try printBenchmark(stderr, min_width, def.name, index, i, runtime_mean);
             }
             try stderr.writeAll("\n");
+            try stderr.context.flush();
         }
     }
 }
 
-fn printBenchmark(writer: anytype, min_widths: [3]u64, func_name: []const u8, arg_name: anytype, iterations: anytype, runtime: anytype) ![3]u64 {
-    const arg_len = std.fmt.count("{s}", .{arg_name});
-    const name_len = try alignedPrint(writer, .left, min_widths[0], "{}{}{}{}", .{
+fn printBenchmark(
+    writer: anytype,
+    min_widths: [3]u64,
+    func_name: []const u8,
+    arg_name: anytype,
+    iterations: anytype,
+    runtime: anytype,
+) ![3]u64 {
+    const arg_len = std.fmt.count("{}", .{arg_name});
+    const name_len = try alignedPrint(writer, .left, min_widths[0], "{s}{s}{}{s}", .{
         func_name,
         "("[0..@boolToInt(arg_len != 0)],
         arg_name,
@@ -98,6 +126,25 @@ fn printBenchmark(writer: anytype, min_widths: [3]u64, func_name: []const u8, ar
     const runtime_len = try alignedPrint(writer, .right, min_widths[2], "{}", .{runtime});
 
     return [_]u64{ name_len, it_len, runtime_len };
+}
+
+fn formatter(comptime fmt_str: []const u8, value: anytype) Formatter(fmt_str, @TypeOf(value)) {
+    return .{ .value = value };
+}
+
+fn Formatter(fmt_str: []const u8, comptime T: type) type {
+    return struct {
+        value: T,
+
+        pub fn format(
+            self: @This(),
+            comptime fmt: []const u8,
+            options: std.fmt.FormatOptions,
+            writer: anytype,
+        ) !void {
+            try std.fmt.format(writer, fmt_str, .{self.value});
+        }
+    };
 }
 
 fn alignedPrint(writer: anytype, dir: enum { left, right }, width: u64, comptime fmt: []const u8, args: anytype) !u64 {
@@ -182,9 +229,9 @@ test "benchmark generics" {
         pub fn sum_vectors(comptime T: type) T {
             const info = @typeInfo(T).Vector;
             const one = @splat(info.len, @as(info.child, 1));
-            var vecs: [512]T = [1]T{one} ** 512;
-            var res = one;
+            const vecs = [1]T{one} ** 512;
 
+            var res = one;
             for (vecs) |vec| {
                 res += vec;
             }
