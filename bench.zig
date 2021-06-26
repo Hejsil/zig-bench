@@ -145,6 +145,8 @@ fn Formatter(fmt_str: []const u8, comptime T: type) type {
             options: std.fmt.FormatOptions,
             writer: anytype,
         ) !void {
+            _ = fmt;
+            _ = options;
             try std.fmt.format(writer, fmt_str, .{self.value});
         }
     };
