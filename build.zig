@@ -3,8 +3,6 @@ const std = @import("std");
 const Builder = std.build.Builder;
 
 pub fn build(b: *Builder) void {
-    const mode = b.standardReleaseOptions();
-
     const test_all_step = b.step("test", "Run all tests in all modes.");
     inline for (@typeInfo(std.builtin.Mode).Enum.fields) |field| {
         const test_mode = @field(std.builtin.Mode, field.name);
