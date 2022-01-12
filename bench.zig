@@ -9,20 +9,32 @@ const time = std.time;
 
 const Decl = std.builtin.TypeInfo.Declaration;
 
+pub const Opts = struct {
+    min_iterations: usize = 10000,
+    max_iterations: usize = 100000,
+    max_time: usize = 500 * time.ns_per_ms,
+};
+
 pub fn benchmark(type_or_instance: anytype) !void {
     switch (@typeInfo(@TypeOf(type_or_instance))) {
-        .Type => try run(type_or_instance, type_or_instance),
-        .Pointer => |p| try run(p.child, type_or_instance),
+        .Type => try run(type_or_instance, type_or_instance, null),
+        .Pointer => |p| try run(p.child, type_or_instance, null),
         else => @compileError("Pass a type or a pointer/instance to a struct."),
     }
 }
 
-fn run(comptime B: type, context: anytype) !void {
+pub fn run(comptime B: type, context: anytype, run_opts: ?Opts) !void {
     const args = if (@hasDecl(B, "args")) B.args else [_]void{{}};
     const arg_names = if (@hasDecl(B, "arg_names")) B.arg_names else [_]u8{};
-    const min_iterations = if (@hasDecl(B, "min_iterations")) B.min_iterations else 10000;
-    const max_iterations = if (@hasDecl(B, "max_iterations")) B.max_iterations else 100000;
-    const max_time = 500 * time.ns_per_ms;
+
+    var opts = Opts{};
+    if (run_opts) |ro| {
+        opts = ro;
+    } else {
+        if (@hasDecl(B, "min_iterations")) opts.min_iterations = B.min_iterations;
+        if (@hasDecl(B, "max_iterations")) opts.max_iterations = B.max_iterations;
+    }
+    opts.max_iterations = math.max(opts.min_iterations, opts.max_iterations);
 
     const functions = comptime blk: {
         var res: []const Decl = &[_]Decl{};
@@ -86,8 +98,8 @@ fn run(comptime B: type, context: anytype) !void {
             var runtime_sum: u128 = 0;
 
             var i: usize = 0;
-            while (i < min_iterations or
-                (i < max_iterations and runtime_sum < max_time)) : (i += 1)
+            while (i < opts.min_iterations or
+                (i < opts.max_iterations and runtime_sum < opts.max_time)) : (i += 1)
             {
                 timer.reset();
 
@@ -254,7 +266,7 @@ test "benchmark generics" {
 }
 
 test "benchmark instance" {
-    const iterations: usize = 1000;
+    const iterations: usize = 100000;
     const args = [_][]const u8{ "01" };
     const arg_names = [_][]const u8{ "01 x n" };
 
@@ -296,4 +308,16 @@ test "benchmark instance" {
     try instance.non_resizing_list.ensureTotalCapacity(capacity);
 
     try benchmark(&instance);
+
+    // reset
+    instance.bounded_array.len = 0;
+    instance.non_resizing_list.clearRetainingCapacity();
+    instance.resizing_list.clearAndFree();
+
+    // run with fewer iterations
+    const fewer_iterations = iterations / 2;
+    try run(@TypeOf(instance), &instance, .{
+        .min_iterations = fewer_iterations,
+        .max_iterations = fewer_iterations,
+    });
 }
