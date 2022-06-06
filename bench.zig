@@ -1,5 +1,6 @@
 const std = @import("std");
 
+const testing = std.testing;
 const debug = std.debug;
 const io = std.io;
 const math = std.math;
@@ -9,7 +10,7 @@ const time = std.time;
 
 const Decl = std.builtin.TypeInfo.Declaration;
 
-pub fn benchmark(comptime B: type) !void {
+pub fn benchmark(context: anytype, comptime B: type) !void {
     const args = if (@hasDecl(B, "args")) B.args else [_]void{{}};
     const arg_names = if (@hasDecl(B, "arg_names")) B.arg_names else [_]u8{};
     const min_iterations = if (@hasDecl(B, "min_iterations")) B.min_iterations else 10000;
@@ -95,8 +96,8 @@ pub fn benchmark(comptime B: type) !void {
                 timer.reset();
 
                 const res = switch (@TypeOf(arg)) {
-                    void => @field(B, def.name)(),
-                    else => @field(B, def.name)(arg),
+                    void => @field(B, def.name)(context),
+                    else => @field(B, def.name)(context, arg),
                 };
                 runtimes[i] = timer.read();
                 runtime_sum += runtimes[i];
@@ -195,7 +196,7 @@ fn alignedPrint(writer: anytype, dir: enum { left, right }, width: u64, comptime
 }
 
 test "benchmark" {
-    try benchmark(struct {
+    try benchmark(void, struct {
         // The functions will be benchmarked with the following inputs.
         // If not present, then it is assumed that the functions
         // take no input.
@@ -225,7 +226,7 @@ test "benchmark" {
         pub const min_iterations = 1000;
         pub const max_iterations = 100000;
 
-        pub fn sum_slice(slice: []const u8) u64 {
+        pub fn sum_slice(_: anytype, slice: []const u8) u64 {
             var res: u64 = 0;
             for (slice) |item|
                 res += item;
@@ -233,7 +234,7 @@ test "benchmark" {
             return res;
         }
 
-        pub fn sum_reader(slice: []const u8) u64 {
+        pub fn sum_reader(_: anytype, slice: []const u8) u64 {
             var reader = &io.fixedBufferStream(slice).reader();
             var res: u64 = 0;
             while (reader.readByte()) |c| {
@@ -246,7 +247,7 @@ test "benchmark" {
 }
 
 test "benchmark generics" {
-    try benchmark(struct {
+    try benchmark(void, struct {
         const Vec = @import("std").meta.Vector;
 
         pub const args = [_]type{
@@ -261,7 +262,7 @@ test "benchmark generics" {
             "vec16f16", "vec16f32", "vec16f64",
         };
 
-        pub fn sum_vectors(comptime T: type) T {
+        pub fn sum_vectors(_: anytype, comptime T: type) T {
             const info = @typeInfo(T).Vector;
             const one = @splat(info.len, @as(info.child, 1));
             const vecs = [1]T{one} ** 512;
@@ -271,6 +272,19 @@ test "benchmark generics" {
                 res += vec;
             }
             return res;
+        }
+    });
+}
+
+test "benchmark allocating" {
+    var temp_arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer temp_arena.deinit();
+    
+    var allocator = temp_arena.allocator();
+    
+    try benchmark(&allocator, struct {        
+        pub fn alloc_slice(context: *std.mem.Allocator) ![]u8 {
+            return try context.alloc(u8, 4096);
         }
     });
 }
