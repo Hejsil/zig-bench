@@ -137,8 +137,8 @@ fn printBenchmark(
     iterations: anytype,
     min_runtime: anytype,
     max_runtime: anytype,
-    mean_runtime: anytype,
     variance: anytype,
+    mean_runtime: anytype,
 ) ![6]u64 {
     const arg_len = std.fmt.count("{}", .{arg_name});
     const name_len = try alignedPrint(writer, .left, min_widths[0], "{s}{s}{}{s}", .{
@@ -154,11 +154,11 @@ fn printBenchmark(
     try writer.writeAll(" ");
     const max_runtime_len = try alignedPrint(writer, .right, min_widths[3], "{}", .{max_runtime});
     try writer.writeAll(" ");
-    const mean_runtime_len = try alignedPrint(writer, .right, min_widths[4], "{}", .{mean_runtime});
+    const variance_len = try alignedPrint(writer, .right, min_widths[5], "{}", .{variance});
     try writer.writeAll(" ");
-    const stddev_len = try alignedPrint(writer, .right, min_widths[5], "{}", .{variance});
+    const mean_runtime_len = try alignedPrint(writer, .right, min_widths[4], "{}", .{mean_runtime});
 
-    return [_]u64{ name_len, it_len, min_runtime_len, max_runtime_len, mean_runtime_len, stddev_len };
+    return [_]u64{ name_len, it_len, min_runtime_len, max_runtime_len, mean_runtime_len, variance_len };
 }
 
 fn formatter(comptime fmt_str: []const u8, value: anytype) Formatter(fmt_str, @TypeOf(value)) {
