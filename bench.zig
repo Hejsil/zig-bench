@@ -33,13 +33,16 @@ pub fn benchmark(comptime B: type) !void {
 
     const min_width = blk: {
         const writer = io.null_writer;
-        var res = [_]u64{ 0, 0, 0 };
+        var res = [_]u64{ 0, 0, 0, 0, 0, 0 };
         res = try printBenchmark(
             writer,
             res,
             "Benchmark",
             formatter("{s}", ""),
             formatter("{s}", "Iterations"),
+            formatter("{s}", "Min(ns)"),
+            formatter("{s}", "Max(ns)"),
+            formatter("{s}", "Variance"),
             formatter("{s}", "Mean(ns)"),
         );
         inline for (functions) |f| {
@@ -48,9 +51,9 @@ pub fn benchmark(comptime B: type) !void {
                 const max = math.maxInt(u32);
                 res = if (i < arg_names.len) blk2: {
                     const arg_name = formatter("{s}", arg_names[i]);
-                    break :blk2 try printBenchmark(writer, res, f.name, arg_name, max, max);
+                    break :blk2 try printBenchmark(writer, res, f.name, arg_name, max, max, max, max, max);
                 } else blk2: {
-                    break :blk2 try printBenchmark(writer, res, f.name, i, max, max);
+                    break :blk2 try printBenchmark(writer, res, f.name, i, max, max, max, max, max);
                 };
             }
         }
@@ -65,6 +68,9 @@ pub fn benchmark(comptime B: type) !void {
         "Benchmark",
         formatter("{s}", ""),
         formatter("{s}", "Iterations"),
+        formatter("{s}", "Min(ns)"),
+        formatter("{s}", "Max(ns)"),
+        formatter("{s}", "Variance"),
         formatter("{s}", "Mean(ns)"),
     );
     try stderr.writeAll("\n");
@@ -77,6 +83,9 @@ pub fn benchmark(comptime B: type) !void {
     var timer = try time.Timer.start();
     inline for (functions) |def| {
         inline for (args) |arg, index| {
+            var runtimes: [max_iterations]u64 = undefined;
+            var min: u64 = math.maxInt(u64);
+            var max: u64 = 0;
             var runtime_sum: u128 = 0;
 
             var i: usize = 0;
@@ -89,20 +98,30 @@ pub fn benchmark(comptime B: type) !void {
                     void => @field(B, def.name)(),
                     else => @field(B, def.name)(arg),
                 };
-                const runtime = timer.read();
-                runtime_sum += runtime;
+                runtimes[i] = timer.read();
+                runtime_sum += runtimes[i];
+                if (runtimes[i] < min) min = runtimes[i];
+                if (runtimes[i] > max) max = runtimes[i];
                 switch (@TypeOf(res)) {
                     void => {},
                     else => std.mem.doNotOptimizeAway(&res),
                 }
             }
-
-            const runtime_mean = runtime_sum / i;
+            
+            const runtime_mean = @intCast(u64, runtime_sum / i);
+            
+            var d_sq_sum: u128 = 0;
+            for(runtimes[0..i]) |runtime| {
+                const d = @intCast(i64, @intCast(i128, runtime) - runtime_mean);
+                d_sq_sum += @intCast(u64, d * d);
+            }
+            const variance = d_sq_sum / i;
+            
             if (index < arg_names.len) {
                 const arg_name = formatter("{s}", arg_names[index]);
-                _ = try printBenchmark(stderr, min_width, def.name, arg_name, i, runtime_mean);
+                _ = try printBenchmark(stderr, min_width, def.name, arg_name, i, min, max, variance, runtime_mean);
             } else {
-                _ = try printBenchmark(stderr, min_width, def.name, index, i, runtime_mean);
+                _ = try printBenchmark(stderr, min_width, def.name, index, i, min, max, variance, runtime_mean);
             }
             try stderr.writeAll("\n");
             try stderr.context.flush();
@@ -112,12 +131,15 @@ pub fn benchmark(comptime B: type) !void {
 
 fn printBenchmark(
     writer: anytype,
-    min_widths: [3]u64,
+    min_widths: [6]u64,
     func_name: []const u8,
     arg_name: anytype,
     iterations: anytype,
-    runtime: anytype,
-) ![3]u64 {
+    min_runtime: anytype,
+    max_runtime: anytype,
+    mean_runtime: anytype,
+    variance: anytype,
+) ![6]u64 {
     const arg_len = std.fmt.count("{}", .{arg_name});
     const name_len = try alignedPrint(writer, .left, min_widths[0], "{s}{s}{}{s}", .{
         func_name,
@@ -128,9 +150,15 @@ fn printBenchmark(
     try writer.writeAll(" ");
     const it_len = try alignedPrint(writer, .right, min_widths[1], "{}", .{iterations});
     try writer.writeAll(" ");
-    const runtime_len = try alignedPrint(writer, .right, min_widths[2], "{}", .{runtime});
+    const min_runtime_len = try alignedPrint(writer, .right, min_widths[2], "{}", .{min_runtime});
+    try writer.writeAll(" ");
+    const max_runtime_len = try alignedPrint(writer, .right, min_widths[3], "{}", .{max_runtime});
+    try writer.writeAll(" ");
+    const mean_runtime_len = try alignedPrint(writer, .right, min_widths[4], "{}", .{mean_runtime});
+    try writer.writeAll(" ");
+    const stddev_len = try alignedPrint(writer, .right, min_widths[5], "{}", .{variance});
 
-    return [_]u64{ name_len, it_len, runtime_len };
+    return [_]u64{ name_len, it_len, min_runtime_len, max_runtime_len, mean_runtime_len, stddev_len };
 }
 
 fn formatter(comptime fmt_str: []const u8, value: anytype) Formatter(fmt_str, @TypeOf(value)) {
