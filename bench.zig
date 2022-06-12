@@ -154,11 +154,11 @@ fn printBenchmark(
     try writer.writeAll(" ");
     const max_runtime_len = try alignedPrint(writer, .right, min_widths[3], "{}", .{max_runtime});
     try writer.writeAll(" ");
-    const variance_len = try alignedPrint(writer, .right, min_widths[5], "{}", .{variance});
+    const variance_len = try alignedPrint(writer, .right, min_widths[4], "{}", .{variance});
     try writer.writeAll(" ");
-    const mean_runtime_len = try alignedPrint(writer, .right, min_widths[4], "{}", .{mean_runtime});
+    const mean_runtime_len = try alignedPrint(writer, .right, min_widths[5], "{}", .{mean_runtime});
 
-    return [_]u64{ name_len, it_len, min_runtime_len, max_runtime_len, mean_runtime_len, variance_len };
+    return [_]u64{ name_len, it_len, min_runtime_len, max_runtime_len, variance_len, mean_runtime_len };
 }
 
 fn formatter(comptime fmt_str: []const u8, value: anytype) Formatter(fmt_str, @TypeOf(value)) {
