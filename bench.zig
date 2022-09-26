@@ -7,7 +7,7 @@ const mem = std.mem;
 const meta = std.meta;
 const time = std.time;
 
-const Decl = std.builtin.TypeInfo.Declaration;
+const Decl = std.builtin.Type.Declaration;
 
 pub fn benchmark(comptime B: type) !void {
     const args = if (@hasDecl(B, "args")) B.args else [_]void{{}};
@@ -165,7 +165,7 @@ fn formatter(comptime fmt_str: []const u8, value: anytype) Formatter(fmt_str, @T
     return .{ .value = value };
 }
 
-fn Formatter(fmt_str: []const u8, comptime T: type) type {
+fn Formatter(comptime fmt_str: []const u8, comptime T: type) type {
     return struct {
         value: T,
 
