@@ -60,7 +60,8 @@ pub fn benchmark(comptime B: type) !void {
         break :blk res;
     };
 
-    const stderr = std.io.bufferedWriter(std.io.getStdErr().writer()).writer();
+    var _stderr = std.io.bufferedWriter(std.io.getStdErr().writer());
+    const stderr = _stderr.writer();
     try stderr.writeAll("\n");
     _ = try printBenchmark(
         stderr,
