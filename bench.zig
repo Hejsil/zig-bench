@@ -235,7 +235,8 @@ test "benchmark" {
         }
 
         pub fn sum_reader(slice: []const u8) u64 {
-            var reader = &io.fixedBufferStream(slice).reader();
+            var _reader = io.fixedBufferStream(slice);
+            var reader = &_reader.reader();
             var res: u64 = 0;
             while (reader.readByte()) |c| {
                 res += c;
