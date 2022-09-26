@@ -7,7 +7,7 @@ const mem = std.mem;
 const meta = std.meta;
 const time = std.time;
 
-const Decl = std.builtin.TypeInfo.Declaration;
+const Decl = std.builtin.Type.Declaration;
 
 pub fn benchmark(comptime B: type) !void {
     const args = if (@hasDecl(B, "args")) B.args else [_]void{{}};
@@ -60,7 +60,8 @@ pub fn benchmark(comptime B: type) !void {
         break :blk res;
     };
 
-    const stderr = std.io.bufferedWriter(std.io.getStdErr().writer()).writer();
+    var _stderr = std.io.bufferedWriter(std.io.getStdErr().writer());
+    const stderr = _stderr.writer();
     try stderr.writeAll("\n");
     _ = try printBenchmark(
         stderr,
@@ -165,7 +166,7 @@ fn formatter(comptime fmt_str: []const u8, value: anytype) Formatter(fmt_str, @T
     return .{ .value = value };
 }
 
-fn Formatter(fmt_str: []const u8, comptime T: type) type {
+fn Formatter(comptime fmt_str: []const u8, comptime T: type) type {
     return struct {
         value: T,
 
@@ -234,7 +235,8 @@ test "benchmark" {
         }
 
         pub fn sum_reader(slice: []const u8) u64 {
-            var reader = &io.fixedBufferStream(slice).reader();
+            var _reader = io.fixedBufferStream(slice);
+            var reader = &_reader.reader();
             var res: u64 = 0;
             while (reader.readByte()) |c| {
                 res += c;
