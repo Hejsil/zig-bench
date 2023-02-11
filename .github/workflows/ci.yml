@@ -18,7 +18,7 @@ jobs:
       - uses: goto-bus-stop/setup-zig@v2.0.1
         with:
           version: master
-      - run: zig test -O${{ matrix.optimize }}
+      - run: zig test bench.zig -O${{ matrix.optimize }}
   lint:
     runs-on: ubuntu-latest
     steps:
