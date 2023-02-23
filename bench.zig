@@ -83,7 +83,7 @@ pub fn benchmark(comptime B: type) !void {
 
     var timer = try time.Timer.start();
     inline for (functions) |def| {
-        inline for (args) |arg, index| {
+        inline for (args, 0..) |arg, index| {
             var runtimes: [max_iterations]u64 = undefined;
             var min: u64 = math.maxInt(u64);
             var max: u64 = 0;
