@@ -144,9 +144,9 @@ fn printBenchmark(
     const arg_len = std.fmt.count("{}", .{arg_name});
     const name_len = try alignedPrint(writer, .left, min_widths[0], "{s}{s}{}{s}", .{
         func_name,
-        "("[0..@boolToInt(arg_len != 0)],
+        "("[0..@intFromBool(arg_len != 0)],
         arg_name,
-        ")"[0..@boolToInt(arg_len != 0)],
+        ")"[0..@intFromBool(arg_len != 0)],
     });
     try writer.writeAll(" ");
     const it_len = try alignedPrint(writer, .right, min_widths[1], "{}", .{iterations});
@@ -249,12 +249,10 @@ test "benchmark" {
 
 test "benchmark generics" {
     try benchmark(struct {
-        const Vec = @import("std").meta.Vector;
-
         pub const args = [_]type{
-            Vec(4, f16),  Vec(4, f32),  Vec(4, f64),
-            Vec(8, f16),  Vec(8, f32),  Vec(8, f64),
-            Vec(16, f16), Vec(16, f32), Vec(16, f64),
+            @Vector(4, f16),  @Vector(4, f32),  @Vector(4, f64),
+            @Vector(8, f16),  @Vector(8, f32),  @Vector(8, f64),
+            @Vector(16, f16), @Vector(16, f32), @Vector(16, f64),
         };
 
         pub const arg_names = [_][]const u8{
