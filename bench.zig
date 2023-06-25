@@ -144,9 +144,9 @@ fn printBenchmark(
     const arg_len = std.fmt.count("{}", .{arg_name});
     const name_len = try alignedPrint(writer, .left, min_widths[0], "{s}{s}{}{s}", .{
         func_name,
-        "("[0..@boolToInt(arg_len != 0)],
+        "("[0..@intFromBool(arg_len != 0)],
         arg_name,
-        ")"[0..@boolToInt(arg_len != 0)],
+        ")"[0..@intFromBool(arg_len != 0)],
     });
     try writer.writeAll(" ");
     const it_len = try alignedPrint(writer, .right, min_widths[1], "{}", .{iterations});
