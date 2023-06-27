@@ -109,12 +109,12 @@ pub fn benchmark(comptime B: type) !void {
                 }
             }
 
-            const runtime_mean = @intCast(u64, runtime_sum / i);
+            const runtime_mean: u64 = @intCast(runtime_sum / i);
 
             var d_sq_sum: u128 = 0;
             for (runtimes[0..i]) |runtime| {
-                const d = @intCast(i64, @intCast(i128, runtime) - runtime_mean);
-                d_sq_sum += @intCast(u64, d * d);
+                const d = @as(i64, @intCast(@as(i128, @intCast(runtime)) - runtime_mean));
+                d_sq_sum += @as(u64, @intCast(d * d));
             }
             const variance = d_sq_sum / i;
 
