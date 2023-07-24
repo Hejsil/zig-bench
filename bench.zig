@@ -263,7 +263,7 @@ test "benchmark generics" {
 
         pub fn sum_vectors(comptime T: type) T {
             const info = @typeInfo(T).Vector;
-            const one = @splat(info.len, @as(info.child, 1));
+            const one: T = @splat(@as(info.child, 1));
             const vecs = [1]T{one} ** 512;
 
             var res = one;
