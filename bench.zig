@@ -19,8 +19,6 @@ pub fn benchmark(comptime B: type) !void {
     const functions = comptime blk: {
         var res: []const Decl = &[_]Decl{};
         for (meta.declarations(B)) |decl| {
-            if (!decl.is_pub)
-                continue;
             if (@typeInfo(@TypeOf(@field(B, decl.name))) != .Fn)
                 continue;
             res = res ++ [_]Decl{decl};
